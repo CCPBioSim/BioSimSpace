@@ -1,113 +1,200 @@
+######################################################################
+# BioSimSpace: Making biomolecular simulation a breeze!
+#
+# Copyright: 2017-2019
+#
+# Authors: Lester Hedges <lester.hedges@gmail.com>
+#
+# BioSimSpace is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+#
+# BioSimSpace is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with BioSimSpace. If not, see <http://www.gnu.org/licenses/>.
+#####################################################################
+
+"""
+Making biomolecular simulation a breeze!
+
+A collection of tools that makes it easy to write robust and interoperable
+molecular workflow components.
+
+www.biosimspace.org
+"""
+
+__author__ = "Lester Hedges"
+__email_ = "lester.hedges@gmail.com"
+
+__all__ = ["Align",
+           "FreeEnergy",
+           "Gateway",
+           "IO",
+           "Metadynamics",
+           "MD",
+           "Node",
+           "Notebook",
+           "Parameters",
+           "Process",
+           "Protocol",
+           "Solvent",
+           "Trajectory",
+           "Types",
+           "Units"]
+
+# Make sure we're using the Sire python interpreter.
+try:
+    import Sire
+    del Sire
+except ModuleNotFoundError:
+    raise ModuleNotFoundError("BioSimSpace currently requires the Sire "
+        + "Python interpreter: www.siremol.org")
+
 # Determine whether we're being imported from a Jupyter notebook.
-def _is_notebook():
-    try:
-        shell = get_ipython().__class__.__name__
-        if shell == 'ZMQInteractiveShell':
-            return True   # Jupyter notebook or qtconsole
-        elif shell == 'TerminalInteractiveShell':
-            return False  # Terminal running IPython
-        else:
-            return False  # Other type (?)
-    except NameError:
-        return False      # Probably standard Python interpreter
+try:
+    shell = get_ipython().__class__.__name__
+    if shell == 'ZMQInteractiveShell':
+        _is_notebook = True   # Jupyter notebook or qtconsole
+    elif shell == 'TerminalInteractiveShell':
+        _is_notebook = False  # Terminal running IPython
+    else:
+        _is_notebook = False  # Other type (?)
+except NameError:
+    _is_notebook = False      # Probably standard Python interpreter
 
 # Determine whether we're being run interactively.
-def _is_interactive():
-    try:
-        shell = get_ipython().__class__.__name__
-        if shell == 'ZMQInteractiveShell':
-            return True   # Jupyter notebook or qtconsole
-        elif shell == 'TerminalInteractiveShell':
-            return True   # Terminal running IPython
-        else:
-            return False  # Other type (?)
-    except NameError:
-        return False      # Probably standard Python interpreter
-
-from BioSimSpace.Driver import MD
-
-import BioSimSpace.Gateway
-import BioSimSpace.Notebook
-import BioSimSpace.Process
-import BioSimSpace.Protocol
-import BioSimSpace.Trajectory
-
-import Sire.IO
-import Sire.Base
-import Sire.System
-
-import Sire.Mol
-
-from Sire.Mol import AtomMCSMatcher as MCSMatcher
-
-from warnings import warn
-
-def readMolecules( files ):
-    return Sire.IO.MoleculeParser.read( files )
-
-def readMolecule( files ):
-    return Sire.IO.MoleculeParser.read( files )[Sire.Mol.MolIdx(0)].molecule()
-
-def saveMolecules(filebase, system, fileformat):
-    return Sire.IO.MoleculeParser.save(system, filebase, \
-                      {"fileformat":Sire.Base.wrap(fileformat)})
-
-def saveMolecule(filebase, molecule):
-    s = Sire.System.System("BioSimSpace molecule")
-    m = Sire.Mol.MoleculeGroup("all")
-    m.add(molecule)
-    s._old_add(m)
-    f1 = saveMolecules(filebase, s, "PRM7")
-    f2 = saveMolecules(filebase, s, "RST7")
-    return f1+f2
-
-def _system_add(system, molecule):
-    system._old_add(molecule, Sire.Mol.MGIdx(0))
-
-def _system_fileformat(system):
-    return system.property("fileformat").value()
-
-def _system_take(system, molid):
-    molecule = system[ molid ]
-    system.remove(molecule.number())
-    return molecule
-
-Sire.System.System._old_add = Sire.System.System.add
-Sire.System.System.add = _system_add
-Sire.System.System.fileFormat = _system_fileformat
-Sire.System.System.take = _system_take
-
-class MolWithResName(Sire.Mol.MolWithResID):
-    def __init__(self, resname):
-        super().__init__( Sire.Mol.ResName(resname) )
-
-def viewMolecules( files, idxs=None ):
-    """View the molecules contained in the passed file(s). Optionally supply
-       a list of indices of molecules you want to view. This views the molecules
-       and also returns a view object that will allow you to change the view,
-       e.g. choosing different molecules to view etc.
-    """
-
-    if not _is_notebook():
-        warn("You can only view molecules from within a Jupyter notebook.")
-        return None
-
-    if isinstance(files, str):
-        files = [files]
-
-    print("Reading molecules from '%s'" % files)
-    s = readMolecules(files)
-
-    print("Rendering the molecules...")
-    v = BioSimSpace.Notebook.View(s)
-
-    if idxs:
-        v.molecules(idxs)
+try:
+    shell = get_ipython().__class__.__name__
+    if shell == 'ZMQInteractiveShell':
+        _is_interactive = True   # Jupyter notebook or qtconsole
+    elif shell == 'TerminalInteractiveShell':
+        _is_interactive = True   # Terminal running IPython
     else:
-        v.molecules()
+        _is_interactive = False  # Other type (?)
+except NameError:
+    _is_interactive = False      # Probably standard Python interpreter
 
-    return v
+# Default to non-verbose error messages.
+_is_verbose = False
+
+def setVerbose(verbose):
+    """Set verbosity of error messages.
+
+       Parameters
+       ----------
+
+       verbose : bool
+           Whether to print verbose error messages.
+    """
+    if type(verbose) is not bool:
+        raise TypeError("'verbose' must be of type 'bool'.")
+
+    global _is_verbose
+    _is_verbose = verbose
+
+def _isVerbose():
+    """Whether verbose error messages are active.
+
+       Returns
+       ------
+
+       is_verbose : bool
+           Whether verbose error messages are active.
+    """
+    global _is_verbose
+    return _is_verbose
+
+from os import environ as _environ
+from warnings import warn as _warn
+
+# Check to see if AMBERHOME is set.
+if "AMBERHOME" in _environ:
+    _amber_home = _environ.get("AMBERHOME")
+else:
+    _amber_home = None
+
+# Check to see if GROMACS is installed.
+from Sire import Base as _SireBase
+from os import path as _path
+
+# First, let the user tell us where to find GROMACS. This
+# assumes that gromacs is installed in $GROMACSHOME/bin/gmx.
+_gmx_exe = None
+if "GROMACSHOME" in _environ:
+    try:
+        _gmx_exe = _SireBase.findExe("%s/bin/gmx" % _environ.get("GROMACSHOME")) \
+                            .absoluteFilePath()
+    except:
+        try:
+            _gmx_exe = _SireBase.findExe("%s/bin/gmx_mpi" % _environ.get("GROMACSHOME")) \
+                                .absoluteFilePath()
+        except:
+            pass
+
+if _gmx_exe is None:
+    # The user has not told us where it is, so need to look in $PATH.
+    try:
+        _gmx_exe = _SireBase.findExe("gmx").absoluteFilePath()
+    except:
+        try:
+            _gmx_exe = _SireBase.findExe("gmx_mpi").absoluteFilePath()
+        except:
+            pass
+
+# Set the bundled GROMACS topology file directory.
+_gromacs_path = _path.dirname(_SireBase.getBinDir()) + "/share/gromacs/top"
+del _environ
+del _SireBase
+
+if not _path.isdir(_gromacs_path):
+    _gromacs_path = None
+
+    # Try using the GROMACS exe to get the location of the data directory.
+    if _gmx_exe is not None:
+
+        import subprocess as _subprocess
+
+        # Generate the shell command.
+        _command = "%s -h 2>&1 | grep 'Data prefix' | awk -F ':' '{print $2}'" % _gmx_exe
+
+        # Run the command.
+        _proc = _subprocess.run(_command, shell=True, stdout=_subprocess.PIPE)
+
+        del _command
+
+        # Get the data prefix.
+        if _proc.returncode == 0:
+            _gromacs_path = _proc.stdout.decode("ascii").strip() + "/share/gromacs/top"
+            # Check for the topology file directory.
+            if not _path.isdir(_gromacs_path):
+                _gromacs_path = None
+
+        del _path
+        del _proc
+        del _subprocess
+
+from . import Align
+from . import FreeEnergy
+from . import Gateway
+from . import IO
+from . import Metadynamics
+from . import MD
+from . import Node
+from . import Notebook
+from . import Parameters
+from . import Process
+from . import Protocol
+from . import Solvent
+from . import Trajectory
+from . import Types
+from . import Units
 
 from ._version import get_versions
 __version__ = get_versions()['version']
+del _version
 del get_versions
